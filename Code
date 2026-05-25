@@ -1,0 +1,145 @@
+#define BLYNK_TEMPLATE_ID "TMPL3oQtyMtQT"
+#define BLYNK_TEMPLATE_NAME "Smart Plant"
+#define BLYNK_AUTH_TOKEN "fdRsiGYJQ_mWXzaSz88aEs5_AJhX0LwP"
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <DHT.h>
+#include <Wire.h>
+
+// Blynk credentials
+char auth[] = "";  // Enter your Blynk Auth token
+char ssid[] = "";  // Enter your WiFi SSID
+char pass[] = "";  // Enter your WiFi Password
+
+DHT dht(D4, DHT11);  // (DHT sensor pin, sensor type)
+BlynkTimer timer;
+
+// Define component pins
+#define SOIL_PIN A0         // A0 Soil Moisture Sensor
+#define PIR_PIN D5          // D5 PIR Motion Sensor
+#define RELAY_PIN_1 D3      // D3 Relay
+#define PUSH_BUTTON_1 D7    // D7 Button
+#define VPIN_BUTTON_1 V12   // Virtual pin for button control
+#define VPIN_SOIL_ALERT V2  // Virtual pin for soil moisture data
+
+int relay1State = LOW;
+int PIR_ToggleValue;
+int pushButton1State = HIGH;
+
+// Threshold values for soil moisture
+#define MOISTURE_LOW_THRESHOLD 20
+#define MOISTURE_HIGH_THRESHOLD 100
+
+bool moistureAlertSent = false;  // To prevent repeated alerts
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(PIR_PIN, INPUT);
+  pinMode(RELAY_PIN_1, OUTPUT);
+  digitalWrite(RELAY_PIN_1, LOW);
+  pinMode(PUSH_BUTTON_1, INPUT_PULLUP);
+
+  // Initialize Blynk and DHT11
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+  dht.begin();
+
+  // Set timers for sensors and button
+  timer.setInterval(100L, soilMoistureSensor);
+  timer.setInterval(100L, DHT11Sensor);
+  timer.setInterval(500L, checkPhysicalButton);
+}
+
+// Soil Moisture Sensor function
+void soilMoistureSensor() {
+  int value = analogRead(SOIL_PIN);
+  value = map(value, 0, 1024, 0, 100);
+  value = (value - 100) * -1;
+
+  Blynk.virtualWrite(VPIN_SOIL_ALERT, value);  // Send soil moisture to Blynk
+
+  // Control relay based on soil moisture
+  if (value < MOISTURE_LOW_THRESHOLD) {
+    relay1State = HIGH; // Turn relay ON
+    digitalWrite(RELAY_PIN_1, relay1State);
+
+    // Send Blynk notification if not already sent
+    if (!moistureAlertSent) {
+      Blynk.logEvent("low_moisture", "WARNING: Soil moisture levels are LOW!");
+      moistureAlertSent = true;  // Prevent multiple alerts
+    }
+  } 
+  else if (value > MOISTURE_HIGH_THRESHOLD) {
+    relay1State = LOW; // Turn relay OFF
+    digitalWrite(RELAY_PIN_1, relay1State);
+    moistureAlertSent = false;  // Reset alert flag when moisture is sufficient
+  }
+}
+
+// DHT11 Sensor function
+void DHT11Sensor() {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  Blynk.virtualWrite(V0, t); // Temperature
+  Blynk.virtualWrite(V1, h); // Humidity
+}
+
+// PIR Sensor function
+void PIRSensor() {
+  bool value = digitalRead(PIR_PIN);
+  if (value) {
+    Blynk.logEvent("pirmotion", "WARNING! Motion Detected!");  // Event for motion detection
+    WidgetLED LED(V5);
+    LED.on();
+  } else {
+    WidgetLED LED(V5);
+    LED.off();
+  }
+}
+
+// Virtual pin for PIR toggle
+BLYNK_WRITE(V6) {
+  PIR_ToggleValue = param.asInt();
+}
+
+// Sync relay button state on Blynk app connection
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(VPIN_BUTTON_1);
+}
+
+// Handle relay control via Blynk virtual button
+BLYNK_WRITE(VPIN_BUTTON_1) {
+  relay1State = param.asInt();
+  digitalWrite(RELAY_PIN_1, relay1State);
+}
+
+// Physical button to toggle relay
+void checkPhysicalButton() {
+  if (digitalRead(PUSH_BUTTON_1) == LOW) {
+    if (pushButton1State != LOW) {
+      relay1State = !relay1State; // Toggle relay state
+      digitalWrite(RELAY_PIN_1, relay1State);
+      Blynk.virtualWrite(VPIN_BUTTON_1, relay1State); // Update Blynk app
+    }
+    pushButton1State = LOW;
+  } else {
+    pushButton1State = HIGH;
+  }
+}
+
+void loop() {
+  if (PIR_ToggleValue == 1) {
+    PIRSensor();
+  } else {
+    WidgetLED LED(V5);
+    LED.off();
+  }
+
+  Blynk.run();  // Run the Blynk library
+  timer.run();  // Run the Blynk timer
+}
