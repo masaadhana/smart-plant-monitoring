@@ -63,47 +63,9 @@ LiquidCrystal_I2C.h (LCD screen handling)
 
 The software is configured to process environmental conditions sequentially while remaining responsive to rapid security interrupts:
 
-                  +--------------------------+
-                  |  Initialize Pins & IoT   |
-                  +--------------------------+
-                               |
-                               v
-                  +--------------------------+
-                  | Connect to Wi-Fi & Blynk |
-                  +--------------------------+
-                               |
-                               v
-                  +--------------------------+
-                  |    Read Sensor Array     |
-                  | (Moisture, Temp, Motion) |
-                  +--------------------------+
-                               |
-            +------------------+------------------+
-            |                                     |
-            v                                     v
-  [Soil Moisture check]                    [PIR Motion check]
-            |                                     |
-    Is Moisture Low?                        Is Motion Detected?
-      /          \                             /          \
-  (Yes)          (No)                       (Yes)         (No)
-    |              |                          |             |
-    v              v                          v             v
-Activate Pump   Keep Pump               Push Blynk     Keep Idle
-for 10 seconds    Idle                  Notification
-            |      |                          |             |
-            +------+--------------------------+-------------+
-                               |
-                               v
-                  +--------------------------+
-                  | Stream Datasets to Blynk |
-                  +--------------------------+
-                               |
-                               v
-                  +--------------------------+
-                  |      Wait 1 Second       |
-                  +--------------------------+
-                               |
-                               +--- (Loop Back to Read Sensor Array)
+                 
+<img width="1440" height="1960" alt="image" src="https://github.com/user-attachments/assets/16c22686-9eb4-4955-8a4a-cb7d5285a0ad" />
+
 
 
 🛠️ Installation & Deployment
